@@ -4,6 +4,8 @@ A modern web interface for [imapsync](https://imapsync.lamiral.info/) with
 live progress bars, multi-account support, and a single self-contained
 Docker image.
 
+![imapsync UI](imapsync-ui.png)
+
 ## Features
 
 - **Multi-account input** - add N source → destination pairs in one go,
