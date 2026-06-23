@@ -1,0 +1,21 @@
+services:
+  imapsync-ui:
+    build: .
+    image: imapsync-ui:latest
+    container_name: imapsync-ui
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - IMAPSYNC_LOG_DIR=/var/log/imapsync-ui
+    volumes:
+      - imapsync-logs:/var/log/imapsync-ui
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health').read()"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  imapsync-logs:

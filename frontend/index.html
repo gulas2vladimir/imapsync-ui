@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>imapsync · web UI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bg: '#0b0d12',
+            panel: '#11141b',
+            line: '#1c2230',
+            accent: '#7c9eff',
+            ok: '#34d399',
+            warn: '#fbbf24',
+            err: '#f87171',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html, body { background: #0b0d12; color: #e6e8ee; }
+    body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .mono { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+    .scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .scrollbar::-webkit-scrollbar-thumb { background: #2a3144; border-radius: 4px; }
+    .scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .glow-ring { box-shadow: 0 0 0 1px #2a3144, 0 8px 24px rgba(0,0,0,.35); }
+    details > summary { list-style: none; cursor: pointer; }
+    details > summary::-webkit-details-marker { display: none; }
+    .log-line { white-space: pre-wrap; word-break: break-word; }
+    .log-line.err { color: #f87171; }
+    .log-line.warn { color: #fbbf24; }
+    .log-line.ok { color: #34d399; }
+    .bar { transition: width .25s ease; }
+    @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.35} }
+    .dot-running { animation: pulse-dot 1.2s ease-in-out infinite; }
+  </style>
+</head>
+<body class="min-h-screen">
+  <div class="max-w-7xl mx-auto p-6">
+    <!-- header -->
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="text-accent" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 4h16v16H4z"/><path d="M4 4l8 8 8-8"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-xl font-semibold tracking-tight">imapsync</h1>
+          <p class="text-xs text-white/50">One-way mailbox sync, with progress</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs text-white/60">
+        <span id="conn-status" class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-line/60 border border-line">
+          <span class="w-1.5 h-1.5 rounded-full bg-white/30"></span>
+          idle
+        </span>
+      </div>
+    </header>
+
+    <!-- account form -->
+    <section class="glow-ring bg-panel rounded-2xl p-5 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-sm font-semibold tracking-wide uppercase text-white/70">Account pairs</h2>
+          <p class="text-xs text-white/40 mt-0.5">Each pair syncs source (host1) to destination (host2)</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="flex items-center gap-2 text-xs text-white/70 cursor-pointer select-none">
+            <input id="parallel" type="checkbox" class="accent-accent" />
+            Run in parallel
+          </label>
+          <button id="btn-add" class="text-xs px-3 py-1.5 rounded-md bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 transition">
+            + Add account
+          </button>
+        </div>
+      </div>
+
+      <div id="accounts" class="space-y-3"></div>
+
+      <div class="mt-5 flex items-center justify-end gap-2">
+        <button id="btn-clear" class="text-xs px-3 py-1.5 rounded-md border border-line text-white/70 hover:bg-line/50 transition">Clear logs</button>
+        <button id="btn-start" class="text-sm px-5 py-2 rounded-md bg-accent text-bg font-semibold hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed">
+          Start sync
+        </button>
+      </div>
+    </section>
+
+    <!-- progress panels -->
+    <section id="runs" class="space-y-4"></section>
+
+    <footer class="mt-10 text-center text-xs text-white/30">
+      imapsync web ui · powered by FastAPI · WebSocket live progress
+    </footer>
+  </div>
+
+  <!-- account row template -->
+  <template id="tpl-account">
+    <div class="account border border-line rounded-xl p-4 bg-bg/40" data-id="">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="status-dot w-2 h-2 rounded-full bg-white/30"></span>
+          <input class="acc-name bg-transparent border-0 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-accent/40 px-1 rounded" placeholder="account name" />
+        </div>
+        <div class="flex items-center gap-3 text-xs text-white/50">
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="opt-automap accent-accent" />
+            automap
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="opt-delete2 accent-accent" />
+            delete2
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" class="opt-dry accent-accent" />
+            dry-run
+          </label>
+          <button class="btn-remove text-white/40 hover:text-err transition" title="Remove">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- source -->
+        <div class="rounded-lg border border-line p-3 bg-line/20">
+          <div class="text-[10px] uppercase tracking-wider text-white/40 mb-2">source (host1)</div>
+          <div class="grid grid-cols-12 gap-2">
+            <input class="host1 col-span-7 px-2 py-1.5 rounded-md bg-bg border border-line text-sm mono" placeholder="imap.example.com" />
+            <input class="port1 col-span-2 px-2 py-1.5 rounded-md bg-bg border border-line text-sm mono" placeholder="993" />
+            <select class="enc1 col-span-3 px-2 py-1.5 rounded-md bg-bg border border-line text-xs">
+              <option value="auto">auto</option>
+              <option value="ssl">ssl</option>
+              <option value="tls">tls</option>
+              <option value="none">none</option>
+            </select>
+            <input class="user1 col-span-12 px-2 py-1.5 rounded-md bg-bg border border-line text-sm" placeholder="user@example.com" />
+            <input class="password1 col-span-12 px-2 py-1.5 rounded-md bg-bg border border-line text-sm" placeholder="password" type="password" />
+          </div>
+        </div>
+
+        <!-- destination -->
+        <div class="rounded-lg border border-line p-3 bg-line/20">
+          <div class="text-[10px] uppercase tracking-wider text-white/40 mb-2">destination (host2)</div>
+          <div class="grid grid-cols-12 gap-2">
+            <input class="host2 col-span-7 px-2 py-1.5 rounded-md bg-bg border border-line text-sm mono" placeholder="imap.destination.com" />
+            <input class="port2 col-span-2 px-2 py-1.5 rounded-md bg-bg border border-line text-sm mono" placeholder="993" />
+            <select class="enc2 col-span-3 px-2 py-1.5 rounded-md bg-bg border border-line text-xs">
+              <option value="auto">auto</option>
+              <option value="ssl">ssl</option>
+              <option value="tls">tls</option>
+              <option value="none">none</option>
+            </select>
+            <input class="user2 col-span-12 px-2 py-1.5 rounded-md bg-bg border border-line text-sm" placeholder="user@example.com" />
+            <input class="password2 col-span-12 px-2 py-1.5 rounded-md bg-bg border border-line text-sm" placeholder="password" type="password" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- run panel template -->
+  <template id="tpl-run">
+    <div class="run-panel glow-ring bg-panel rounded-2xl p-5" data-run-id="">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <h3 class="text-sm font-semibold tracking-wide uppercase text-white/70">Run <span class="run-id mono text-accent"></span></h3>
+          <span class="run-status text-xs px-2 py-0.5 rounded-md bg-line/60 border border-line text-white/60">running</span>
+        </div>
+        <button class="btn-abort text-xs px-3 py-1.5 rounded-md border border-err/40 text-err/80 hover:bg-err/10 transition">Abort</button>
+      </div>
+      <div class="accounts space-y-3"></div>
+    </div>
+  </template>
+
+  <script src="/static/app.js" type="module"></script>
+</body>
+</html>
