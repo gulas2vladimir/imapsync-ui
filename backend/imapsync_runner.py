@@ -155,6 +155,10 @@ def build_command(account: Account, log_dir: Path) -> list[str]:
     # pidfile for clean abort
     pidfile = log_dir / f".{account.id}.pid"
     cmd += ["--pidfile", str(pidfile)]
+    # imapsync defaults to /root/tmp which the non-root runtime user can't write.
+    # Pin --tmpdir to a path it owns; imapsync will create the leaf dir.
+    tmpdir = log_dir / f".{account.id}.tmp"
+    cmd += ["--tmpdir", str(tmpdir)]
 
     if o.extra:
         cmd += o.extra
