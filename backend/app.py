@@ -8,27 +8,25 @@ Endpoints:
   POST /api/sync/{run_id}/abort - abort a run
   WS   /ws/{run_id}           - live event stream for a run
 """
+
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import uuid
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
-
 from imapsync_runner import (
     Account,
     SyncOptions,
     abort_sync,
     run_sync,
 )
+from pydantic import BaseModel, Field
 
 # --- paths ---------------------------------------------------------------
 
@@ -244,7 +242,9 @@ async def _drive_run(run: RunState) -> None:
 
     # Determine final status
     if run.status != "aborted":
-        run.status = "completed" if all(rc == 0 for rc in run.results.values()) else "failed"
+        run.status = (
+            "completed" if all(rc == 0 for rc in run.results.values()) else "failed"
+        )
 
     # Tell subscribers we're done
     done_evt = {
