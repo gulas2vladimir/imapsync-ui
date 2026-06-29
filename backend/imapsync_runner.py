@@ -35,6 +35,15 @@ RE_COPYING = re.compile(
     r"^Copying message\s+(\d+)\s*/\s*(\d+)\s+from folder\s+(.+?)\s+to\s+(.+?)\s*$",
     re.MULTILINE,
 )
+# imapsync 2.314 emits per-message progress in the form:
+#   msg INBOX/75268 {21980}      copied to INBOX/11787      7.90 msgs/s  699.221 KiB/s 0.995 GiB copied ETA: ... 3454 s  27279/39069 msgs left
+# We extract the source/dest folder names and the trailing "N/M msgs left"
+# tally so we can drive a real progress bar.
+RE_MSG_COPIED = re.compile(
+    r"^msg\s+(\S+)\s+\{[^}]*\}\s+copied to\s+(\S+)\b.*?(\d+)\s*/\s*(\d+)\s+msgs left\s*$"
+)
+# imapsync also prints a bare summary on its own line, e.g. "7726/39069 msgs left".
+RE_MSGS_LEFT = re.compile(r"^(\d+)\s*/\s*(\d+)\s+msgs left\s*$")
 RE_FOLDER_LINE = re.compile(r"^(\+{2,}|\.{2,}|\*{2,})\s+(.+)$")
 RE_EXIT = re.compile(r"Exiting with return value\s+(\d+)")
 RE_DETECTED_ERRORS = re.compile(r"Detected\s+(\d+)\s+errors")
@@ -169,7 +178,28 @@ def build_command(account: Account, log_dir: Path) -> list[str]:
 def _parse_line(account_id: str, line: str) -> Optional[SyncEvent]:
     """Map a single stdout line to a typed event. Returns None for chatter."""
 
-    # Per-message progress
+    # Per-message progress (imapsync 2.314+: "msg SRC {..} copied to DST ... N/T msgs left")
+    m = RE_MSG_COPIED.match(line)
+    if m:
+        src, dst, left, total = m.groups()
+        total_i = int(total)
+        left_i = int(left)
+        # "msgs left" counts down as messages are copied. Translate to
+        # current/total so the existing progress event shape is preserved.
+        current = max(total_i - left_i, 0)
+        return SyncEvent(
+            account_id,
+            "progress",
+            {
+                "current": current,
+                "total": total_i,
+                "source_folder": src,
+                "dest_folder": dst,
+                "percent": round(current / total_i * 100, 1) if total_i else 0,
+            },
+        )
+
+    # Per-message progress (older imapsync builds: "Copying message N/M from FOO to FOO")
     m = RE_COPYING.match(line)
     if m:
         cur, total, src, dst = m.groups()
