@@ -12,7 +12,7 @@ const tplRun = $('#tpl-run');
 
 function makeAccount(initial = {}) {
   const node = tplAcc.content.firstElementChild.cloneNode(true);
-  node.dataset.id = crypto.randomUUID().slice(0, 8);
+  node.dataset.id = (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 6)).slice(0, 8);
   $('.acc-name', node).value = initial.name || `account-${accountsRoot.children.length + 1}`;
   $('.host1', node).value = initial.host1 || '';
   $('.port1', node).value = initial.port1 || '';
